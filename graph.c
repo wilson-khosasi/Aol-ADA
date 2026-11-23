@@ -3,7 +3,10 @@
 #include "graph.h"
 
 Graph *createGraph(int numVertices){
-    Graph *graph = malloc(sizeof(Graph));
+    if(numVertices <= 0){
+        return NULL;
+    }
+    Graph *graph = malloc(sizeof(*graph));
 
     if(graph == NULL){
         return NULL;
@@ -25,18 +28,19 @@ Graph *createGraph(int numVertices){
     return graph;
 }
 
-static void insertNode(Vertex *vertex, int destination, int weight){
+static Node *createNode(int destination, int weight){
     Node *newNode = malloc(sizeof(*newNode));
 
     if(newNode == NULL){
-        return;
+        return NULL;
     }
 
     newNode->dest = destination;
     newNode->weight = weight;
 
-    newNode->next = vertex->head;
-    vertex->head = newNode;
+    newNode->next = NULL;
+
+    return newNode;
 }
 
 void addEdge(Graph *graph, int source, int destination, int weight){
@@ -44,13 +48,28 @@ void addEdge(Graph *graph, int source, int destination, int weight){
         return;
     }
 
-    if(source < 0 || source >= graph->numVertices || destination >= graph->numVertices || destination < 0){
+    if(source < 0 || source >= graph->numVertices || destination >= graph->numVertices || destination < 0 || weight <= 0 || source == destination){
         return;
     }
+
+    //alokasi satu satu
+    //di algo sebelumnya, kalo ad gagal alokasi, gak kedetect, bisa jadi directed edge nanti
+    Node *depan = createNode(destination, weight);
+    Node *belakang = createNode(source, weight);
+
+    if(depan == NULL || belakang == NULL){ //hanya jika kedua nya return tidak null, baru di insert
+        free(depan);
+        free(belakang);
+        return;
+    }
+
     // tambah adjacency list di vertex source
-    insertNode(&graph->vertices[source], destination, weight);
+    depan->next = graph->vertices[source].head;
+    graph->vertices[source].head = depan;
+
     // tambah adjacency list di vertex destination
-    insertNode(&graph->vertices[destination], source, weight);
+    belakang->next = graph->vertices[destination].head;
+    graph->vertices[destination].head = belakang;
 }
 
 void freeGraph(Graph *graph){
@@ -88,7 +107,7 @@ void generateGrid(Graph *graph){
 
         // connect ke bawah
         if(row < GRID_SIZE - 1){
-            addEdge(graph, i, i+5, rand() % 10 + 1);
+            addEdge(graph, i, i+GRID_SIZE, rand() % 10 + 1);
         }
     }
 }
