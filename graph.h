@@ -23,5 +23,7 @@ typedef struct  {
 
 Graph *createGraph(int numVertices);
 void addEdge(Graph *graph, int source, int destination, int weight);
+void freeGraph(Graph *graph);
+void generateGrid(Graph *graph);
 
 #endif

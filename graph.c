@@ -52,3 +52,43 @@ void addEdge(Graph *graph, int source, int destination, int weight){
     // tambah adjacency list di vertex destination
     insertNode(&graph->vertices[destination], source, weight);
 }
+
+void freeGraph(Graph *graph){
+    if(graph == NULL){
+        return;
+    }
+    //free linked list Node dulu
+    for(int i = 0; i < graph->numVertices; i++){
+        Node *curr = graph->vertices[i].head;
+
+        while(curr != NULL){
+            Node *temp = curr;
+            curr = curr->next;
+            free(temp);
+        }
+    }
+    // baru free vertices sama gridnya. 
+    // Harus in this order, kalo gak kita bisa kehilangan pointer ke mereka
+    free(graph->vertices);
+    free(graph);
+}
+
+void generateGrid(Graph *graph){
+    if(graph == NULL){
+        return;
+    }
+    for(int i = 0; i < NUM_VERTICES; i++){
+        int row = i / GRID_SIZE;
+        int col = i % GRID_SIZE;
+
+        // connect ke kanan
+        if(col < GRID_SIZE - 1){
+            addEdge(graph, i, i+1, rand() % 10 + 1);
+        }
+
+        // connect ke bawah
+        if(row < GRID_SIZE - 1){
+            addEdge(graph, i, i+5, rand() % 10 + 1);
+        }
+    }
+}
