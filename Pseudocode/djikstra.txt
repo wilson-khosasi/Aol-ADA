@@ -1,0 +1,28 @@
+DIJKSTRA(Graph, source)
+
+    for each vertex v:
+        dist[v] = INFINITY
+        prev[v] = NIL
+
+    dist[source] = 0
+
+    INSERT(PQ, source, 0)
+
+    while PQ is not empty:
+
+        u = EXTRACT_MIN(PQ)
+
+        for each neighbor v of u:
+
+            newTime = dist[u] + weight(u, v)
+
+            if newTime < dist[v]:
+
+                dist[v] = newTime
+                prev[v] = u
+
+                INSERT_OR_DECREASE_KEY(
+                    PQ, v, newTime
+                )
+
+    return dist, prev
