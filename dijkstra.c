@@ -2,41 +2,40 @@
 #include <stdlib.h>
 
 #include "dijkstra.h"
+#include "priority_queue.h"
 
 /*
- * Selects the unvisited vertex with the smallest tentative travel time.
- * Returns -1 if no reachable unvisited vertex remains.
+ * Ordinary Dijkstra using the team's shared priority queue.
  *
- * This O(V) scan temporarily replaces EXTRACT_MIN from the shared Priority
- * Queue. It can be removed when priority_queue.h/.c is ready.
+ * The current priority_queue.h does not expose decreaseKey(). Therefore,
+ * each improved distance is inserted as a new heap entry. Older entries
+ * become stale and are skipped when extracted if their priority no longer
+ * matches dist[vertex]. This approach requires insert() to support duplicate
+ * vertex entries and the priority queue to grow dynamically.
+ *
+ * API return-value convention expected here:
+ *   insert()      -> non-zero on success, zero on failure
+ *   extractMin()  -> non-zero on success, zero if extraction fails
  */
-static int findMinUnvisited(
-    const int *dist,
-    const int *visited,
-    int numVertices
-) {
-    int minVertex = -1;
-    int minDistance = DIJKSTRA_INF;
-
-    for (int v = 0; v < numVertices; v++) {
-        if (!visited[v] && dist[v] < minDistance) {
-            minDistance = dist[v];
-            minVertex = v;
-        }
-    }
-
-    return minVertex;
-}
-
 DijkstraResult *dijkstra(const Graph *graph, int source) {
     if (graph == NULL || graph->vertices == NULL || graph->numVertices <= 0) {
         return NULL;
     }
 
     const int n = graph->numVertices;
-
     if (source < 0 || source >= n) {
         return NULL;
+    }
+
+    /* Validate all adjacency-list entries before starting the algorithm. */
+    for (int u = 0; u < n; u++) {
+        for (const Node *edge = graph->vertices[u].head;
+             edge != NULL;
+             edge = edge->next) {
+            if (edge->dest < 0 || edge->dest >= n || edge->weight < 0) {
+                return NULL;
+            }
+        }
     }
 
     DijkstraResult *result = malloc(sizeof(*result));
@@ -44,78 +43,94 @@ DijkstraResult *dijkstra(const Graph *graph, int source) {
         return NULL;
     }
 
-    int *visited = calloc((size_t)n, sizeof(*visited));
+    result->numVertices = n;
+    result->source = source;
     result->dist = malloc((size_t)n * sizeof(*result->dist));
     result->prev = malloc((size_t)n * sizeof(*result->prev));
 
-    if (visited == NULL || result->dist == NULL || result->prev == NULL) {
-        free(visited);
-        free(result->dist);
-        free(result->prev);
-        free(result);
+    if (result->dist == NULL || result->prev == NULL) {
+        freeDijkstraResult(result);
         return NULL;
     }
 
-    result->numVertices = n;
-    result->source = source;
-
-    /* Initialization: all vertices are initially unreachable. */
     for (int v = 0; v < n; v++) {
         result->dist[v] = DIJKSTRA_INF;
         result->prev[v] = -1;
     }
     result->dist[source] = 0;
 
-    /*
-     * Ordinary Dijkstra using a linear minimum search.
-     * Later, the findMinUnvisited() step will be replaced by the team's
-     * shared Priority Queue operations.
-     */
-    for (int iteration = 0; iteration < n; iteration++) {
-        int u = findMinUnvisited(result->dist, visited, n);
+    /* Initial capacity is n; insert() is expected to grow the heap as needed. */
+    priorityQueue *pq = createPriorityQueue(n);
+    if (pq == NULL) {
+        freeDijkstraResult(result);
+        return NULL;
+    }
 
-        /* No reachable unvisited vertex remains. */
-        if (u == -1) {
-            break;
+    if (!insert(pq, source, 0)) {
+        freePriorityQueue(pq);
+        freeDijkstraResult(result);
+        return NULL;
+    }
+
+    while (!isEmpty(pq)) {
+        heapNode minNode;
+
+        if (!extractMin(pq, &minNode)) {
+            freePriorityQueue(pq);
+            freeDijkstraResult(result);
+            return NULL;
         }
 
-        visited[u] = 1;
+        const int u = minNode.vertex;
 
-        /* Relax every outgoing edge from u. */
-        for (Node *edge = graph->vertices[u].head;
+        /* Guard against malformed queue entries. */
+        if (u < 0 || u >= n) {
+            freePriorityQueue(pq);
+            freeDijkstraResult(result);
+            return NULL;
+        }
+
+        /* Ignore outdated entries created before a later distance decrease. */
+        if (minNode.priority != result->dist[u]) {
+            continue;
+        }
+
+        /* Relax every outgoing edge from the extracted minimum vertex. */
+        for (const Node *edge = graph->vertices[u].head;
              edge != NULL;
              edge = edge->next) {
+            const int v = edge->dest;
+            const int travelTime = edge->weight;
 
-            int v = edge->dest;
-            int travelTime = edge->weight;
-
-            /* Defensive checks in case the graph was modified manually. */
+            /* Defensive validation in case graph memory was modified later. */
             if (v < 0 || v >= n || travelTime < 0) {
-                free(visited);
+                freePriorityQueue(pq);
                 freeDijkstraResult(result);
                 return NULL;
             }
 
-            /*
-             * Avoid integer overflow and do not process finalized vertices.
-             * For a non-negative weighted graph, a finalized vertex cannot
-             * receive a better distance later.
-             */
-            if (!visited[v] &&
-                result->dist[u] != DIJKSTRA_INF &&
-                result->dist[u] <= INT_MAX - travelTime) {
+            /* Avoid signed integer overflow when adding edge weights. */
+            if (result->dist[u] > INT_MAX - travelTime) {
+                continue;
+            }
 
-                int newDistance = result->dist[u] + travelTime;
+            const int newDistance = result->dist[u] + travelTime;
 
-                if (newDistance < result->dist[v]) {
-                    result->dist[v] = newDistance;
-                    result->prev[v] = u;
+            if (newDistance < result->dist[v]) {
+                result->dist[v] = newDistance;
+                result->prev[v] = u;
+
+                /* Insert a new entry; any older entry for v becomes stale. */
+                if (!insert(pq, v, newDistance)) {
+                    freePriorityQueue(pq);
+                    freeDijkstraResult(result);
+                    return NULL;
                 }
             }
         }
     }
 
-    free(visited);
+    freePriorityQueue(pq);
     return result;
 }
 
@@ -135,7 +150,7 @@ int reconstructPath(
         return 0;
     }
 
-    /* First collect the path backwards: destination -> source. */
+    /* Collect destination -> source, then reverse the sequence. */
     int count = 0;
     int current = destination;
 
@@ -147,7 +162,7 @@ int reconstructPath(
         path[count++] = current;
         current = result->prev[current];
 
-        /* Broken predecessor chain: fail safely instead of looping. */
+        /* Detect an invalid or broken predecessor chain safely. */
         if (current < 0 || current >= result->numVertices) {
             return -1;
         }
@@ -158,7 +173,6 @@ int reconstructPath(
     }
     path[count++] = result->source;
 
-    /* Reverse to obtain source -> destination order. */
     for (int left = 0, right = count - 1; left < right; left++, right--) {
         int temp = path[left];
         path[left] = path[right];
