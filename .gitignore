@@ -7,3 +7,4 @@
 # Build directories
 out/
 build/
+.vscode/
