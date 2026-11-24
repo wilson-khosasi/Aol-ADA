@@ -2,7 +2,7 @@
 #include "priorityQueue.h"
 
 int main(){
-    priorityQueue *pq = createPriorityQueue(5);
+    priorityQueue *pq = createPriorityQueue(4);
 
     if(pq == NULL){
         printf("Failed to create Priority Queue\n");
@@ -15,6 +15,8 @@ int main(){
     insert(pq, 15, 20);
     insert(pq, 5, 5);
     insert(pq, 25, 15);
+    printf("Size: %d\n", pq->size);
+    printf("Capacity: %d\n", pq->capacity);
 
     // Display the heap array
     printf("Priority Queue:\n");

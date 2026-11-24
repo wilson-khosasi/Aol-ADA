@@ -43,6 +43,21 @@ static void heapifyUp(priorityQueue *pq, int index){
     }
 }
 
+static int resizePQ(priorityQueue *pq){
+    int newCapacity = pq->size * 2;
+
+    heapNode *new = realloc(pq->nodes, newCapacity * sizeof(heapNode));
+
+    if(new == NULL){
+        return 0;
+    }
+
+    pq->nodes = new;
+    pq->capacity = newCapacity;
+
+    return 1;
+}
+
 int insert(priorityQueue *pq, int vertex, int priority){
     // untuk 0 gagal, 1 sukses
     if(pq == NULL){
@@ -51,7 +66,9 @@ int insert(priorityQueue *pq, int vertex, int priority){
 
     // cheak jika array heap sudah penuh
     if(pq->size == pq->capacity){
-        return 0;
+        if(!(resizePQ(pq))){
+            return 0;
+        }
     }
 
     // initiatlize data yang mau diinsert
